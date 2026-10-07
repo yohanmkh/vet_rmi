@@ -33,7 +33,7 @@ public class VetClinicImpl extends UnicastRemoteObject implements VetClinicRemot
     @Override
     public AnimalRemote findByName(String name) throws RemoteException {
         for (AnimalImpl a : patients) {
-            if (a.getName().equals(name))
+            if (a.getName().equalsIgnoreCase(name))
                 return a;
         }
         return null; // or throw a custom exception
