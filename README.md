@@ -101,13 +101,13 @@ Redémarrer le serveur avant chaque test (l'état est en mémoire : si le serveu
 
 | Exigence | Statut | Commentaire |
 |---|---|---|
-| **A0** | **PARTIAL** | Exercices préliminaires de prise en main (HelloWorld mono puis multi-projet). Le dépôt fournit directement l'architecture finale à 3 répertoires (`common`, `server`, `client`). |
+| **A0** | **PARTIAL** | Exercices tutoriels / de référence (Hello RMI mono puis multi-projet). Le dépôt implémente directement l'architecture cible à 3 projets (`common`, `server`, `client`). |
 | **A1** | **PASS** | Récupération d'un patient sous forme de stub dynamique RMI (`Proxy.isProxyClass(...) == true`). |
 | **A2** | **PASS** | `Species` est sérialisable et transmis par valeur (copie indépendante côté client). |
 | **A3** | **PASS** | `MedicalRecordRemote` est un objet distant partagé (modifié par une JVM, relu par une seconde JVM indépendante). |
 | **A4** | **PASS** | Seul `VetClinic` est publié dans le registre RMI. Recherche d'un animal inconnu renvoie `null`. |
 | **A5** | **PASS** | Ajout dynamique d'un patient via `addPatient(...)` avec mise à jour de la liste sur le serveur. |
-| **A6** | **PASS (implémentation) / PARTIAL (démontrabilité)** | Franchissement des seuils à la hausse (100, 500, 1000) et nettoyage des observateurs morts (crash) validés expérimentalement. Le franchissement à la baisse est implémenté dans `checkThresholds()` mais non déclenchable via l'API spécifiée faute d'opération `removePatient()`. |
+| **A6** | **PARTIAL** | Les franchissements à la hausse (100, 500, 1000) et la tolérance aux pannes des observateurs déconnectés sont validés expérimentalement. La logique de franchissement à la baisse est implémentée mais non déclenchable via l'API spécifiée `VetClinicRemote` faute d'opération de suppression de patient. |
 | **A7** | **PASS** | Échec (`ClassNotFoundException`) lors du passage d'une sous-classe présente uniquement sur le client (`UnsharedSpecies`), succès pour une sous-classe présente dans `common` (`Dog`). |
 | **A8** | **PASS** | CLI interactive complète avec découplage strict : `CliConsole` n'a aucun import ni dépendance envers `java.rmi.*` ; toutes les invocations et exceptions distantes sont encapsulées dans `CliLogic`. |
 
@@ -115,10 +115,10 @@ Redémarrer le serveur avant chaque test (l'état est en mémoire : si le serveu
 
 ## Remarques pour le compte-rendu
 
-- **A0 (Prise en main préliminaire)** : L'étape A0 demandait la prise en main de RMI sur un HelloWorld mono-projet puis multi-projets. Ce dépôt se concentre sur le livrable final attendu pour le cabinet vétérinaire, structuré d'emblée selon l'architecture propre à 3 dossiers (`common/`, `server/`, `client/`).
+- **A0 (Exercices tutoriels préliminaires)** : Les exercices HelloWorld préliminaires constituent des étapes d'initiation et de référence. Ce dépôt se concentre sur le livrable final attendu pour le cabinet vétérinaire, structuré d'emblée selon l'architecture cible à 3 dossiers (`common/`, `server/`, `client/`).
 - **A6 (Seuils et observateurs)** :
   - *Franchissements à la hausse (100, 500, 1000)* : testés et validés avec plusieurs observateurs connectés.
   - *Gestion des observateurs défaillants* : lorsqu'un client observateur est tué brutalement (`kill -9`), l'exception `RemoteException` levée lors de la notification est capturée par le serveur, qui désabonne proprement l'observateur mort sans bloquer les autres abonnés.
-  - *Franchissements à la baisse* : la logique est implémentée dans `VetClinicImpl.checkThresholds()` (`prevCount >= threshold && newCount < threshold`), mais n'est pas démontrable via l'interface publique du cabinet qui ne spécifie aucune méthode de suppression de patient (`removePatient`).
+  - *Franchissements à la baisse* : la logique est implémentée dans `VetClinicImpl.checkThresholds()` (`prevCount >= threshold && newCount < threshold`), mais n'est pas déclenchable via l'interface publique `VetClinicRemote` qui ne spécifie aucune méthode de suppression de patient (`removePatient`).
 - **A8 (Séparation Console / RMI)** : La classe `CliConsole` ne contient aucun import `java.rmi.*` et ne manipule aucun stub distant. Elle consomme des vues/DTOs fournis par `CliLogic`, et les erreurs réseau/RMI sont transformées en `ClientException` pour un affichage convivial dans la console.
 - **Persistance** : Les données sont stockées en mémoire dans le tas du serveur (remise à zéro au redémarrage du serveur).
