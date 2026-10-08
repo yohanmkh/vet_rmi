@@ -1,0 +1,14 @@
+# Java compiled files
+*.class
+
+# Build output directories
+out/
+common/out/
+server/out/
+client/out/
+
+# IDE & OS files
+.DS_Store
+.idea/
+*.iml
+.vscode/
