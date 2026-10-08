@@ -69,19 +69,26 @@ Ce test vérifie :
 
 ### Validation multi-processus (A3 et A6)
 
-Pour tester avec de vrais processus clients séparés :
+Pour tester avec de vrais processus clients séparés sans script intermédiaire :
 
 - **A3 (deux clients modifient et lisent le même dossier)** :
   ```bash
-  ./scripts/test_a3_multiprocess.sh
+  # Terminal 1 : Client 1 met à jour le dossier
+  java -cp common/out:client/out vet.client.Client a3-writer Rex "En observation" "Visite de controle"
+
+  # Terminal 2 : Client 2 vérifie la modification depuis une autre JVM
+  java -cp common/out:client/out vet.client.Client a3-reader Rex "En observation" "Visite de controle"
   ```
-  Le premier processus client modifie le dossier de Rex et termine. Le second client le lit depuis une autre JVM et constate la modification.
 
 - **A6 (deux observateurs + crash d'un client)** :
   ```bash
-  ./scripts/test_a6_multiprocess.sh
+  # Lancer deux clients observateurs dans deux terminaux séparés
+  java -cp common/out:client/out vet.client.Client observer Observer-1 30
+  java -cp common/out:client/out vet.client.Client observer Observer-2 30
+
+  # Dans un troisième terminal (ou via la CLI), ajouter des patients pour franchir le seuil 100
+  # Puis tuer le premier client (Ctrl+C) et continuer à ajouter des patients jusqu'à 500.
   ```
-  Lance deux clients observateurs en arrière-plan, ajoute le 100ᵉ patient (les deux reçoivent l'alerte), tue brutalement le premier client (`kill -9`), puis ajoute des patients jusqu'à 500 : le serveur retire le client mort sans planter et le deuxième client reçoit l'alerte.
 
 ---
 
