@@ -26,7 +26,7 @@ public class CliLogic {
         this.clinic = clinic;
     }
 
-    // ── DTOs for the Presentation Layer ────────────────────────────────────────
+    // --- Vues (DTOs) pour la presentation ---
 
     public static class PatientView {
         private final String name;
@@ -63,7 +63,7 @@ public class CliLogic {
         public List<String> getObservations() { return observations; }
     }
 
-    // ── Error translation ──────────────────────────────────────────────────────
+    // --- Conversion des exceptions RMI ---
 
     private static ClientException wrap(RemoteException e) {
         Throwable root = e;
@@ -73,7 +73,7 @@ public class CliLogic {
         return new ClientException("Server unreachable or call failed (" + root.getMessage() + ").", e);
     }
 
-    // ── Patient Queries & Commands ─────────────────────────────────────────────
+    // --- Operations sur les patients ---
 
     public List<PatientView> getPatients() throws ClientException {
         try {
@@ -118,7 +118,7 @@ public class CliLogic {
         );
     }
 
-    // ── Medical Record Commands ────────────────────────────────────────────────
+    // --- Operations sur les dossiers medicaux ---
 
     public MedicalRecordView getMedicalRecord(String patientName) throws ClientException {
         try {
@@ -170,7 +170,7 @@ public class CliLogic {
         }
     }
 
-    // ── Observer / Alerts ──────────────────────────────────────────────────────
+    // --- Gestion des observateurs et alertes ---
 
     public void subscribe() throws ClientException {
         if (subscribed) {

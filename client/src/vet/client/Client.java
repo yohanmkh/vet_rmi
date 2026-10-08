@@ -18,9 +18,10 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Automated validation suite for HAI704I TP1 requirements A1 through A7.
- * Supports both standalone comprehensive suite and multi-process subcommands:
- *   - default: runs in-JVM automated suite A1-A7
+ * Programme de validation des exigences A1 à A7 (TP1 RMI).
+ * Prend en charge l'exécution directe de l'ensemble des tests
+ * ou des sous-commandes pour les tests multi-processus :
+ *   - par défaut : tests A1 à A7 dans la JVM courante
  *   - a3-writer <patient> <status> <observation> [host [port]]
  *   - a3-reader <patient> <expectedStatus> <expectedObs> [host [port]]
  *   - observer <name> <durationSec> [host [port]]
@@ -165,7 +166,7 @@ public class Client {
         int port = args.length >= 2 ? Integer.parseInt(args[1]) : 1099;
 
         System.out.println("==================================================");
-        System.out.println("  HAI704I TP1 — Java RMI Automated Validation Suite");
+        System.out.println("  HAI704I TP1 — Programme de validation RMI");
         System.out.println("==================================================\n");
 
         Registry registry = LocateRegistry.getRegistry(host, port);
@@ -417,7 +418,7 @@ public class Client {
         System.out.println("[A8] MANUAL CHECK REQUIRED: the CLI is interactive. Run 'java -cp common/out:client/out vet.client.Main'.");
 
         System.out.println("\n==================================================");
-        System.out.println("  Automated Validation Complete!");
+        System.out.println("  Fin des tests de validation.");
         System.out.println("==================================================");
     }
 }

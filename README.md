@@ -52,8 +52,8 @@ Le menu propose les options demandées :
 
 ## Validation des étapes
 
-### Tests automatisés (A1 à A7)
-Un script de test valide l'ensemble des points dans une même console :
+### Programme de validation (A1 à A7)
+La classe `Client` valide l'ensemble des points dans une même console :
 
 ```bash
 java -cp common/out:client/out vet.client.Client

@@ -1,8 +1,8 @@
 package vet.client;
 
 /**
- * Error reported by the client logic layer. It hides the underlying RMI
- * exception so that the console only deals with a message to display.
+ * Exception levee par la couche logique client lors d'une erreur
+ * de communication ou d'appel distant.
  */
 public class ClientException extends Exception {
 
