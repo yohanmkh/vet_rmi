@@ -116,9 +116,9 @@ Redémarrer le serveur avant chaque test (l'état est en mémoire : si le serveu
 ## Remarques pour le compte-rendu
 
 - **A0 (Exercices tutoriels préliminaires)** : Les exercices HelloWorld préliminaires constituent des étapes d'initiation et de référence. Ce dépôt se concentre sur le livrable final attendu pour le cabinet vétérinaire, structuré d'emblée selon l'architecture cible à 3 dossiers (`common/`, `server/`, `client/`).
+- **A3 (Dossier médical partagé)** : La JVM du client écrivain s'est terminée après la modification du dossier médical. Une seconde JVM a ensuite récupéré la même référence distante et observé les changements. Cela confirme que le dossier médical est un objet distant partagé, et non une copie locale transmise par valeur. Cette expérience démontre le partage de l'état en mémoire du serveur, pas une persistance sur disque (remise à zéro au redémarrage du serveur).
 - **A6 (Seuils et observateurs)** :
   - *Franchissements à la hausse (100, 500, 1000)* : testés et validés avec plusieurs observateurs connectés.
   - *Gestion des observateurs défaillants* : lorsqu'un client observateur est tué brutalement (`kill -9`), l'exception `RemoteException` levée lors de la notification est capturée par le serveur, qui désabonne proprement l'observateur mort sans bloquer les autres abonnés.
   - *Franchissements à la baisse* : la logique est implémentée dans `VetClinicImpl.checkThresholds()` (`prevCount >= threshold && newCount < threshold`), mais n'est pas déclenchable via l'interface publique `VetClinicRemote` qui ne spécifie aucune méthode de suppression de patient (`removePatient`).
 - **A8 (Séparation Console / RMI)** : La classe `CliConsole` ne contient aucun import `java.rmi.*` et ne manipule aucun stub distant. Elle consomme des vues/DTOs fournis par `CliLogic`, et les erreurs réseau/RMI sont transformées en `ClientException` pour un affichage convivial dans la console.
-- **Persistance** : Les données sont stockées en mémoire dans le tas du serveur (remise à zéro au redémarrage du serveur).
