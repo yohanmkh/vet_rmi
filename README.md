@@ -69,26 +69,31 @@ Ce test vérifie :
 
 ### Validation multi-processus (A3 et A6)
 
-Pour tester avec de vrais processus clients séparés sans script intermédiaire :
+Redémarrer le serveur avant chaque test (l'état est en mémoire : si le serveur a déjà plus de 99 patients, aucune alerte 100 ne peut plus être produite, et pour A3 une ancienne valeur identique ferait croire à tort que le test passe).
 
 - **A3 (deux clients modifient et lisent le même dossier)** :
   ```bash
-  # Terminal 1 : Client 1 met à jour le dossier
+  # Terminal 1 : Client 1 met à jour le dossier puis se termine
   java -cp common/out:client/out vet.client.Client a3-writer Rex "En observation" "Visite de controle"
 
-  # Terminal 2 : Client 2 vérifie la modification depuis une autre JVM
+  # Terminal 2 : Client 2 (autre JVM) lit le dossier ; code retour 1 si la modification n'est pas vue
   java -cp common/out:client/out vet.client.Client a3-reader Rex "En observation" "Visite de controle"
   ```
 
 - **A6 (deux observateurs + crash d'un client)** :
   ```bash
-  # Lancer deux clients observateurs dans deux terminaux séparés
-  java -cp common/out:client/out vet.client.Client observer Observer-1 30
-  java -cp common/out:client/out vet.client.Client observer Observer-2 30
+  # Terminaux 1 et 2 : deux observateurs (chaque alerte est affichée et écrite dans /tmp/vet_obs_<nom>.log)
+  java -cp common/out:client/out vet.client.Client observer Observer-1 60
+  java -cp common/out:client/out vet.client.Client observer Observer-2 60
 
-  # Dans un troisième terminal (ou via la CLI), ajouter des patients pour franchir le seuil 100
-  # Puis tuer le premier client (Ctrl+C) et continuer à ajouter des patients jusqu'à 500.
+  # Terminal 3 : atteindre 99 patients, puis franchir le seuil 100
+  java -cp common/out:client/out vet.client.Client populate 99
+  java -cp common/out:client/out vet.client.Client populate 100
+
+  # Tuer brutalement un observateur (kill -9 <pid du premier java>), puis franchir 500
+  java -cp common/out:client/out vet.client.Client populate 500
   ```
+  Le serveur affiche `Observer unreachable, removing from subscriber list.` et Observer-2 reçoit l'alerte du seuil 500 (idem pour 1000 avec `populate 1000`).
 
 ---
 

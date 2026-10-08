@@ -250,7 +250,7 @@ public class Client {
         boolean obsFound = obsReadByClient2.contains(testObs);
 
         if (newStatus.equals(readStatusByClient2) && obsFound) {
-            System.out.println("[A3] PASS (In-JVM two-stub verification). Note: for full two-process verification across separate JVMs, run 'scripts/test_a3_multiprocess.sh'.");
+            System.out.println("[A3] PASS (two stubs in one JVM only). For two real JVMs use the a3-writer / a3-reader commands from the README.");
         } else {
             System.out.println("[A3] FAIL: MedicalRecord modifications not shared.");
         }
@@ -269,7 +269,9 @@ public class Client {
         AnimalRemote unknown = clinic.findByName("NonExistentPatientXYZ");
         System.out.println("Search for nonexistent patient returned: " + unknown);
 
-        if (singleBinding && !allPatients.isEmpty() && unknown == null) {
+        boolean patientsAreStubs = !allPatients.isEmpty() && Proxy.isProxyClass(allPatients.get(0).getClass());
+        System.out.println("getPatients() elements are dynamic proxies? " + patientsAreStubs);
+        if (singleBinding && patientsAreStubs && unknown == null) {
             System.out.println("[A4] PASS: Clinic published as single entry point; search returns stubs and null when not found.");
         } else {
             System.out.println("[A4] FAIL: A4 requirements check failed.");
@@ -347,17 +349,12 @@ public class Client {
             UnicastRemoteObject.unexportObject(obs2, true);
 
             if (obs1Received && obs2Received && obs2Received500) {
-                System.out.println("[A6] PASS: Both observers received threshold 100; dead observer pruned cleanly; surviving observer received threshold 500.");
+                System.out.println("[A6] PASS (single JVM, upward only): both observers received threshold 100; surviving observer received threshold 500. Server-side pruning of a killed client is checked with separate JVMs (see README).");
             } else {
                 System.out.println("[A6] FAIL: Observer notifications or dead observer pruning failed.");
             }
         } else {
-            System.out.println("INFO: Patient count is already " + currentCount + " (threshold 100 passed on this server instance).");
-            VetObserverImpl fallbackObs = new VetObserverImpl("TestObserver");
-            clinic.subscribe(fallbackObs);
-            clinic.unsubscribe(fallbackObs);
-            UnicastRemoteObject.unexportObject(fallbackObs, true);
-            System.out.println("[A6] PASS: Observer subscription and clean unexport verified on existing server state.");
+            System.out.println("[A6] MANUAL CHECK REQUIRED: server already holds " + currentCount + " patients, so the threshold 100 crossing cannot be reproduced. Restart the server and rerun.");
         }
         System.out.println("[Note] Downward threshold crossing is implemented on the server but cannot be demonstrated via normal operations because VetClinicRemote does not define a removePatient method.");
 
@@ -372,8 +369,14 @@ public class Client {
             clinic.addPatient("AlienPet", "Dr. Who", "Unknown", unshared);
             System.out.println("UNEXPECTED: Server accepted unshared class without exception.");
         } catch (ServerException se) {
-            failureObserved = true;
-            System.out.println("PASS (Expected Exception caught):");
+            Throwable root = se;
+            while (root.getCause() != null) {
+                root = root.getCause();
+            }
+            failureObserved = root instanceof ClassNotFoundException
+                    && root.getMessage() != null
+                    && root.getMessage().contains("vet.client.UnsharedSpecies");
+            System.out.println(failureObserved ? "Expected failure caught (root cause is ClassNotFoundException for the client-only class):" : "Unexpected ServerException root cause: " + root);
             System.out.println("  ServerException: " + se.getMessage());
             if (se.getCause() instanceof UnmarshalException) {
                 UnmarshalException ue = (UnmarshalException) se.getCause();
@@ -384,8 +387,7 @@ public class Client {
             }
             System.out.println("Explanation: Server JVM cannot deserialize vet.client.UnsharedSpecies because it is missing from the server classpath.");
         } catch (Exception e) {
-            failureObserved = true;
-            System.out.println("Caught exception: " + e.getClass().getName() + ": " + e.getMessage());
+            System.out.println("Unexpected exception (not the expected failure): " + e.getClass().getName() + ": " + e.getMessage());
         }
 
         System.out.println("\nStep 2: Sending shared Dog subclass located in common/...");
@@ -412,7 +414,7 @@ public class Client {
         // A8 — Interactive CLI Notice
         // ---------------------------------------------------------------------
         System.out.println("\n--- [A8] Interactive CLI ---");
-        System.out.println("[A8] MANUAL CHECK REQUIRED: The CLI is an interactive console application. Run 'scripts/test_a8_cli.sh' for automated smoke test or 'java -cp common/out:client/out vet.client.Main' for interactive verification.");
+        System.out.println("[A8] MANUAL CHECK REQUIRED: the CLI is interactive. Run 'java -cp common/out:client/out vet.client.Main'.");
 
         System.out.println("\n==================================================");
         System.out.println("  Automated Validation Complete!");
