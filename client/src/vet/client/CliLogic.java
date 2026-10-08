@@ -63,29 +63,51 @@ public class CliLogic {
         public List<String> getObservations() { return observations; }
     }
 
-    // ── Patient Queries & Commands ─────────────────────────────────────────────
+    // ── Error translation ──────────────────────────────────────────────────────
 
-    public List<PatientView> getPatients() throws RemoteException {
-        List<AnimalRemote> stubs = clinic.getPatients();
-        List<PatientView> views = new ArrayList<>();
-        for (AnimalRemote stub : stubs) {
-            Species sp = stub.getSpecies();
-            views.add(new PatientView(
-                    stub.getName(),
-                    stub.getOwnerName(),
-                    stub.getBreed(),
-                    sp != null ? sp.getName() : "Unknown",
-                    sp != null ? sp.getAverageLifespan() : 0
-            ));
+    private static ClientException wrap(RemoteException e) {
+        Throwable root = e;
+        while (root.getCause() != null) {
+            root = root.getCause();
         }
-        return views;
+        return new ClientException("Server unreachable or call failed (" + root.getMessage() + ").", e);
     }
 
-    public PatientView findByName(String name) throws RemoteException {
-        AnimalRemote stub = clinic.findByName(name);
-        if (stub == null) {
-            return null;
+    // ── Patient Queries & Commands ─────────────────────────────────────────────
+
+    public List<PatientView> getPatients() throws ClientException {
+        try {
+            List<AnimalRemote> stubs = clinic.getPatients();
+            List<PatientView> views = new ArrayList<>();
+            for (AnimalRemote stub : stubs) {
+                views.add(toView(stub));
+            }
+            return views;
+        } catch (RemoteException e) {
+            throw wrap(e);
         }
+    }
+
+    public PatientView findByName(String name) throws ClientException {
+        try {
+            AnimalRemote stub = clinic.findByName(name);
+            return stub == null ? null : toView(stub);
+        } catch (RemoteException e) {
+            throw wrap(e);
+        }
+    }
+
+    public void addPatient(String name, String owner, String breed,
+                           String speciesName, int lifespan) throws ClientException {
+        try {
+            Species species = new Species(speciesName, lifespan);
+            clinic.addPatient(name, owner, breed, species);
+        } catch (RemoteException e) {
+            throw wrap(e);
+        }
+    }
+
+    private PatientView toView(AnimalRemote stub) throws RemoteException {
         Species sp = stub.getSpecies();
         return new PatientView(
                 stub.getName(),
@@ -96,76 +118,95 @@ public class CliLogic {
         );
     }
 
-    public void addPatient(String name, String owner, String breed,
-                           String speciesName, int lifespan) throws RemoteException {
-        Species species = new Species(speciesName, lifespan);
-        clinic.addPatient(name, owner, breed, species);
-    }
-
     // ── Medical Record Commands ────────────────────────────────────────────────
 
-    public MedicalRecordView getMedicalRecord(String patientName) throws RemoteException {
-        AnimalRemote stub = clinic.findByName(patientName);
-        if (stub == null) {
-            return null;
+    public MedicalRecordView getMedicalRecord(String patientName) throws ClientException {
+        try {
+            AnimalRemote stub = clinic.findByName(patientName);
+            if (stub == null) {
+                return null;
+            }
+            MedicalRecordRemote record = stub.getMedicalRecord();
+            if (record == null) {
+                return new MedicalRecordView("No record found", Collections.emptyList());
+            }
+            return new MedicalRecordView(record.getHealthStatus(), record.getObservations());
+        } catch (RemoteException e) {
+            throw wrap(e);
         }
-        MedicalRecordRemote record = stub.getMedicalRecord();
-        if (record == null) {
-            return new MedicalRecordView("No record found", Collections.emptyList());
-        }
-        return new MedicalRecordView(record.getHealthStatus(), record.getObservations());
     }
 
-    public boolean updateHealthStatus(String patientName, String status) throws RemoteException {
-        AnimalRemote stub = clinic.findByName(patientName);
-        if (stub == null) {
-            return false;
+    public boolean updateHealthStatus(String patientName, String status) throws ClientException {
+        try {
+            AnimalRemote stub = clinic.findByName(patientName);
+            if (stub == null) {
+                return false;
+            }
+            MedicalRecordRemote record = stub.getMedicalRecord();
+            if (record == null) {
+                return false;
+            }
+            record.setHealthStatus(status);
+            return true;
+        } catch (RemoteException e) {
+            throw wrap(e);
         }
-        MedicalRecordRemote record = stub.getMedicalRecord();
-        if (record == null) {
-            return false;
-        }
-        record.setHealthStatus(status);
-        return true;
     }
 
-    public boolean addObservation(String patientName, String observation) throws RemoteException {
-        AnimalRemote stub = clinic.findByName(patientName);
-        if (stub == null) {
-            return false;
+    public boolean addObservation(String patientName, String observation) throws ClientException {
+        try {
+            AnimalRemote stub = clinic.findByName(patientName);
+            if (stub == null) {
+                return false;
+            }
+            MedicalRecordRemote record = stub.getMedicalRecord();
+            if (record == null) {
+                return false;
+            }
+            record.addObservation(observation);
+            return true;
+        } catch (RemoteException e) {
+            throw wrap(e);
         }
-        MedicalRecordRemote record = stub.getMedicalRecord();
-        if (record == null) {
-            return false;
-        }
-        record.addObservation(observation);
-        return true;
     }
 
     // ── Observer / Alerts ──────────────────────────────────────────────────────
 
-    public void subscribe() throws RemoteException {
+    public void subscribe() throws ClientException {
         if (subscribed) {
             return;
         }
-        observer = new VetObserverImpl();
-        clinic.subscribe(observer);
-        subscribed = true;
+        try {
+            observer = new VetObserverImpl();
+            clinic.subscribe(observer);
+            subscribed = true;
+        } catch (RemoteException e) {
+            unexportQuietly();
+            throw wrap(e);
+        }
     }
 
-    public void unsubscribe() throws RemoteException {
+    public void unsubscribe() throws ClientException {
         if (!subscribed) {
             return;
         }
         try {
             clinic.unsubscribe(observer);
+        } catch (RemoteException e) {
+            throw wrap(e);
         } finally {
+            unexportQuietly();
+            subscribed = false;
+        }
+    }
+
+    private void unexportQuietly() {
+        if (observer != null) {
             try {
                 UnicastRemoteObject.unexportObject(observer, true);
             } catch (Exception ignored) {
             }
             observer = null;
-            subscribed = false;
         }
     }
 

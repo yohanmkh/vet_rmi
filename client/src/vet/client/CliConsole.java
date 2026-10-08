@@ -1,6 +1,5 @@
 package vet.client;
 
-import java.rmi.RemoteException;
 import java.util.List;
 import java.util.Scanner;
 
@@ -76,8 +75,8 @@ public class CliConsole {
                         + " | Species: " + p.getSpeciesName()
                         + " (avg lifespan: " + p.getLifespan() + " yrs)");
             }
-        } catch (RemoteException e) {
-            System.out.println("Remote communication error: " + e.getMessage());
+        } catch (ClientException e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
@@ -99,8 +98,8 @@ public class CliConsole {
                         + " | Species: " + p.getSpeciesName()
                         + " (avg lifespan: " + p.getLifespan() + " yrs)");
             }
-        } catch (RemoteException e) {
-            System.out.println("Remote communication error: " + e.getMessage());
+        } catch (ClientException e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
@@ -135,8 +134,8 @@ public class CliConsole {
         try {
             logic.addPatient(name, owner, breed, speciesName, lifespan);
             System.out.println("Patient \"" + name + "\" added successfully.");
-        } catch (RemoteException e) {
-            System.out.println("Remote communication error: " + e.getMessage());
+        } catch (ClientException e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
@@ -161,8 +160,8 @@ public class CliConsole {
                     System.out.println("  " + (i + 1) + ". " + obs.get(i));
                 }
             }
-        } catch (RemoteException e) {
-            System.out.println("Remote communication error: " + e.getMessage());
+        } catch (ClientException e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
@@ -182,8 +181,8 @@ public class CliConsole {
             } else {
                 System.out.println("No patient found with name \"" + name + "\".");
             }
-        } catch (RemoteException e) {
-            System.out.println("Remote communication error: " + e.getMessage());
+        } catch (ClientException e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
@@ -203,8 +202,8 @@ public class CliConsole {
             } else {
                 System.out.println("No patient found with name \"" + name + "\".");
             }
-        } catch (RemoteException e) {
-            System.out.println("Remote communication error: " + e.getMessage());
+        } catch (ClientException e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
@@ -216,8 +215,8 @@ public class CliConsole {
         try {
             logic.subscribe();
             System.out.println("Subscribed to clinic alerts (threshold crossings at 100, 500, 1000).");
-        } catch (RemoteException e) {
-            System.out.println("Remote communication error: " + e.getMessage());
+        } catch (ClientException e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
@@ -229,8 +228,8 @@ public class CliConsole {
         try {
             logic.unsubscribe();
             System.out.println("Unsubscribed from clinic alerts.");
-        } catch (RemoteException e) {
-            System.out.println("Remote communication error: " + e.getMessage());
+        } catch (ClientException e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
@@ -239,7 +238,7 @@ public class CliConsole {
             try {
                 logic.unsubscribe();
                 System.out.println("Cleanly unsubscribed from alerts.");
-            } catch (RemoteException e) {
+            } catch (ClientException e) {
                 System.out.println("Could not cleanly unsubscribe: " + e.getMessage());
             }
         }
