@@ -6,6 +6,8 @@ import vet.common.MedicalRecordRemote;
 import vet.common.Species;
 import vet.common.VetClinicRemote;
 
+import java.io.FileWriter;
+import java.io.PrintWriter;
 import java.lang.reflect.Proxy;
 import java.rmi.ServerException;
 import java.rmi.UnmarshalException;
@@ -17,10 +19,148 @@ import java.util.List;
 
 /**
  * Automated validation suite for HAI704I TP1 requirements A1 through A7.
+ * Supports both standalone comprehensive suite and multi-process subcommands:
+ *   - default: runs in-JVM automated suite A1-A7
+ *   - a3-writer <patient> <status> <observation> [host [port]]
+ *   - a3-reader <patient> <expectedStatus> <expectedObs> [host [port]]
+ *   - observer <name> <durationSec> [host [port]]
+ *   - populate <targetCount> [host [port]]
  */
 public class Client {
 
     public static void main(String[] args) throws Exception {
+        if (args.length >= 1 && "a3-writer".equalsIgnoreCase(args[0])) {
+            runA3Writer(args);
+            return;
+        }
+        if (args.length >= 1 && "a3-reader".equalsIgnoreCase(args[0])) {
+            runA3Reader(args);
+            return;
+        }
+        if (args.length >= 1 && "observer".equalsIgnoreCase(args[0])) {
+            runObserverProcess(args);
+            return;
+        }
+        if (args.length >= 1 && "populate".equalsIgnoreCase(args[0])) {
+            runPopulate(args);
+            return;
+        }
+
+        // Default: Full in-JVM test suite
+        runTestSuite(args);
+    }
+
+    // =========================================================================
+    // Multi-Process Subcommands
+    // =========================================================================
+
+    private static void runA3Writer(String[] args) throws Exception {
+        String patient = args.length >= 2 ? args[1] : "Rex";
+        String status = args.length >= 3 ? args[2] : "Treated by Process 1";
+        String observation = args.length >= 4 ? args[3] : "Observation from Process 1";
+        String host = args.length >= 5 ? args[4] : "localhost";
+        int port = args.length >= 6 ? Integer.parseInt(args[5]) : 1099;
+
+        VetClinicRemote clinic = (VetClinicRemote) LocateRegistry.getRegistry(host, port).lookup("VetClinic");
+        AnimalRemote animal = clinic.findByName(patient);
+        if (animal == null) {
+            System.err.println("[A3-Writer] Patient '" + patient + "' not found.");
+            System.exit(1);
+        }
+        MedicalRecordRemote record = animal.getMedicalRecord();
+        record.setHealthStatus(status);
+        record.addObservation(observation);
+        System.out.println("[Client-1 (PID " + ProcessHandle.current().pid() + ")] Updated " + patient + " healthStatus='" + status + "', added observation='" + observation + "'");
+    }
+
+    private static void runA3Reader(String[] args) throws Exception {
+        String patient = args.length >= 2 ? args[1] : "Rex";
+        String expectedStatus = args.length >= 3 ? args[2] : "Treated by Process 1";
+        String expectedObs = args.length >= 4 ? args[3] : "Observation from Process 1";
+        String host = args.length >= 5 ? args[4] : "localhost";
+        int port = args.length >= 6 ? Integer.parseInt(args[5]) : 1099;
+
+        VetClinicRemote clinic = (VetClinicRemote) LocateRegistry.getRegistry(host, port).lookup("VetClinic");
+        AnimalRemote animal = clinic.findByName(patient);
+        if (animal == null) {
+            System.err.println("[A3-Reader] Patient '" + patient + "' not found.");
+            System.exit(1);
+        }
+        MedicalRecordRemote record = animal.getMedicalRecord();
+        String actualStatus = record.getHealthStatus();
+        List<String> actualObs = record.getObservations();
+
+        System.out.println("[Client-2 (PID " + ProcessHandle.current().pid() + ")] Read " + patient + " healthStatus='" + actualStatus + "', total observations=" + actualObs.size());
+
+        boolean statusMatch = expectedStatus.equals(actualStatus);
+        boolean obsMatch = actualObs.contains(expectedObs);
+
+        if (statusMatch && obsMatch) {
+            System.out.println("[A3] PASS (Multi-process verification: changes made by Client 1 observed by Client 2 in distinct JVM)");
+            System.exit(0);
+        } else {
+            System.err.println("[A3] FAIL (Expected status='" + expectedStatus + "' got='" + actualStatus + "', obsFound=" + obsMatch + ")");
+            System.exit(1);
+        }
+    }
+
+    private static void runObserverProcess(String[] args) throws Exception {
+        String name = args.length >= 2 ? args[1] : "ObserverProcess";
+        int durationSec = args.length >= 3 ? Integer.parseInt(args[2]) : 15;
+        String host = args.length >= 4 ? args[3] : "localhost";
+        int port = args.length >= 5 ? Integer.parseInt(args[4]) : 1099;
+
+        VetClinicRemote clinic = (VetClinicRemote) LocateRegistry.getRegistry(host, port).lookup("VetClinic");
+        String logFile = "/tmp/vet_obs_" + name + ".log";
+
+        // File-backed observer that logs every alert
+        VetObserverImpl observer = new VetObserverImpl(name) {
+            @Override
+            public void onAlert(String message) throws java.rmi.RemoteException {
+                super.onAlert(message);
+                try (FileWriter fw = new FileWriter(logFile, true);
+                     PrintWriter pw = new PrintWriter(fw)) {
+                    pw.println(message);
+                } catch (Exception ignored) {
+                }
+            }
+        };
+
+        clinic.subscribe(observer);
+        System.out.println("[" + name + " (PID " + ProcessHandle.current().pid() + ")] Subscribed. Listening for alerts for " + durationSec + "s (logging to " + logFile + ")...");
+
+        try {
+            Thread.sleep(durationSec * 1000L);
+        } catch (InterruptedException ignored) {
+        }
+
+        try {
+            clinic.unsubscribe(observer);
+        } catch (Exception ignored) {
+        }
+        UnicastRemoteObject.unexportObject(observer, true);
+        System.out.println("[" + name + "] Unsubscribed and unexported cleanly.");
+    }
+
+    private static void runPopulate(String[] args) throws Exception {
+        int targetCount = args.length >= 2 ? Integer.parseInt(args[1]) : 100;
+        String host = args.length >= 3 ? args[2] : "localhost";
+        int port = args.length >= 4 ? Integer.parseInt(args[3]) : 1099;
+
+        VetClinicRemote clinic = (VetClinicRemote) LocateRegistry.getRegistry(host, port).lookup("VetClinic");
+        int current = clinic.getPatients().size();
+        System.out.println("[Populate] Current patient count: " + current + ", target: " + targetCount);
+        for (int i = current; i < targetCount; i++) {
+            clinic.addPatient("Batch_" + i, "Owner", "Breed", new Species("Canine", 10));
+        }
+        System.out.println("[Populate] Done. Total patients: " + clinic.getPatients().size());
+    }
+
+    // =========================================================================
+    // Comprehensive In-JVM Test Suite
+    // =========================================================================
+
+    private static void runTestSuite(String[] args) throws Exception {
         String host = args.length >= 1 ? args[0] : "localhost";
         int port = args.length >= 2 ? Integer.parseInt(args[1]) : 1099;
 
@@ -44,12 +184,12 @@ public class Client {
             boolean isAnimalProxy = Proxy.isProxyClass(rex.getClass());
             System.out.println("Is AnimalRemote a dynamic proxy stub? " + isAnimalProxy);
             if (isAnimalProxy && !rex.getClass().getName().contains("AnimalImpl")) {
-                System.out.println("PASS: AnimalRemote is a dynamic RMI proxy stub, not AnimalImpl.");
+                System.out.println("[A1] PASS: AnimalRemote is a dynamic RMI proxy stub (not AnimalImpl).");
             } else {
-                System.out.println("FAIL: AnimalRemote is not an RMI dynamic proxy stub.");
+                System.out.println("[A1] FAIL: AnimalRemote is not an RMI dynamic proxy stub.");
             }
         } else {
-            System.out.println("FAIL: Default animal 'Rex' not found on server.");
+            System.out.println("[A1] FAIL: Default animal 'Rex' not found on server.");
         }
 
         // ---------------------------------------------------------------------
@@ -73,17 +213,16 @@ public class Client {
             System.out.println("Are s1 and s2 the same instance (s1 == s2)? " + (s1 == s2));
 
             if (s2.getAverageLifespan() == origLifespan && s1 != s2) {
-                System.out.println("PASS: Species was transferred by value. Local mutation did not affect the server.");
+                System.out.println("[A2] PASS: Species transferred by value. Local mutation did not affect the server.");
             } else {
-                System.out.println("FAIL: Species mutation affected server or instances are identical.");
+                System.out.println("[A2] FAIL: Species mutation affected server or instances are identical.");
             }
         }
 
         // ---------------------------------------------------------------------
-        // A3 — Remote Medical Record (Shared Across Multiple Clients)
+        // A3 — Remote Medical Record (Shared State Across Multiple Clients)
         // ---------------------------------------------------------------------
-        System.out.println("\n--- [A3] Remote Medical Record (Shared State Across 2 Clients) ---");
-        // Create two independent client lookup connections to demonstrate shared server state
+        System.out.println("\n--- [A3] Remote Medical Record (Shared State) ---");
         VetClinicRemote client1Clinic = (VetClinicRemote) LocateRegistry.getRegistry(host, port).lookup("VetClinic");
         VetClinicRemote client2Clinic = (VetClinicRemote) LocateRegistry.getRegistry(host, port).lookup("VetClinic");
 
@@ -111,9 +250,9 @@ public class Client {
         boolean obsFound = obsReadByClient2.contains(testObs);
 
         if (newStatus.equals(readStatusByClient2) && obsFound) {
-            System.out.println("PASS: MedicalRecord state modified by Client 1 is immediately visible to independent Client 2.");
+            System.out.println("[A3] PASS (In-JVM two-stub verification). Note: for full two-process verification across separate JVMs, run 'scripts/test_a3_multiprocess.sh'.");
         } else {
-            System.out.println("FAIL: MedicalRecord modifications not shared across independent client references.");
+            System.out.println("[A3] FAIL: MedicalRecord modifications not shared.");
         }
 
         // ---------------------------------------------------------------------
@@ -131,9 +270,9 @@ public class Client {
         System.out.println("Search for nonexistent patient returned: " + unknown);
 
         if (singleBinding && !allPatients.isEmpty() && unknown == null) {
-            System.out.println("PASS: Clinic published as single entry point; search returns stubs and null when not found.");
+            System.out.println("[A4] PASS: Clinic published as single entry point; search returns stubs and null when not found.");
         } else {
-            System.out.println("FAIL: A4 requirements check failed.");
+            System.out.println("[A4] FAIL: A4 requirements check failed.");
         }
 
         // ---------------------------------------------------------------------
@@ -159,9 +298,9 @@ public class Client {
                 && retrieved.getSpecies().getAverageLifespan() == 3);
 
         if (countOk && fieldsOk) {
-            System.out.println("PASS: addPatient incremented count (before=" + countBefore + ", after=" + countAfter + ") and patient fields match.");
+            System.out.println("[A5] PASS: addPatient incremented count (before=" + countBefore + ", after=" + countAfter + ") and patient fields match.");
         } else {
-            System.out.println("FAIL: addPatient verification failed (countOk=" + countOk + ", fieldsOk=" + fieldsOk + ").");
+            System.out.println("[A5] FAIL: addPatient verification failed (countOk=" + countOk + ", fieldsOk=" + fieldsOk + ").");
         }
 
         // ---------------------------------------------------------------------
@@ -171,7 +310,6 @@ public class Client {
         int currentCount = clinic.getPatients().size();
         System.out.println("Current patient count: " + currentCount);
 
-        // Advance patient count to 99 if below 99 so we can observe the 100 threshold crossing
         if (currentCount < 99) {
             System.out.println("Pre-populating patients up to 99...");
             for (int i = currentCount; i < 99; i++) {
@@ -181,27 +319,21 @@ public class Client {
         }
 
         if (currentCount == 99) {
-            // Subscribe TWO independent observers
             VetObserverImpl obs1 = new VetObserverImpl("Observer-1");
             VetObserverImpl obs2 = new VetObserverImpl("Observer-2");
             clinic.subscribe(obs1);
             clinic.subscribe(obs2);
             System.out.println("Subscribed two independent observers at count 99.");
 
-            // Add the 100th patient: triggers threshold crossing from 99 to 100
             clinic.addPatient("ThresholdPatient_100", "Owner", "Breed", new Species("Canine", 10));
             boolean obs1Received = obs1.getAlertCount() >= 1;
             boolean obs2Received = obs2.getAlertCount() >= 1;
             System.out.println("Observer-1 received 100 alert? " + obs1Received);
             System.out.println("Observer-2 received 100 alert? " + obs2Received);
 
-            // Simulate Observer-1 crashing / becoming unreachable by unexporting its remote object
             System.out.println("Simulating Observer-1 becoming dead/unreachable (unexporting)...");
             UnicastRemoteObject.unexportObject(obs1, true);
 
-            // Advance to threshold 500 to verify:
-            // 1) The server encounters RemoteException for dead Observer-1 and prunes it cleanly.
-            // 2) The server successfully continues notifying surviving Observer-2.
             int preCount500 = clinic.getPatients().size();
             System.out.println("Adding patients to cross threshold 500 (from " + preCount500 + " to 500)...");
             for (int i = preCount500; i < 500; i++) {
@@ -215,20 +347,19 @@ public class Client {
             UnicastRemoteObject.unexportObject(obs2, true);
 
             if (obs1Received && obs2Received && obs2Received500) {
-                System.out.println("PASS: Both observers received threshold 100; dead observer pruned cleanly; surviving observer received threshold 500.");
+                System.out.println("[A6] PASS: Both observers received threshold 100; dead observer pruned cleanly; surviving observer received threshold 500.");
             } else {
-                System.out.println("FAIL: Observer notifications or dead observer pruning failed.");
+                System.out.println("[A6] FAIL: Observer notifications or dead observer pruning failed.");
             }
         } else {
-            System.out.println("INFO: Patient count is already " + currentCount + " (threshold 100 previously passed).");
-            // Standard observer subscribe/unsubscribe test
+            System.out.println("INFO: Patient count is already " + currentCount + " (threshold 100 passed on this server instance).");
             VetObserverImpl fallbackObs = new VetObserverImpl("TestObserver");
             clinic.subscribe(fallbackObs);
             clinic.unsubscribe(fallbackObs);
             UnicastRemoteObject.unexportObject(fallbackObs, true);
-            System.out.println("PASS: Observer subscription and clean unexport verified.");
+            System.out.println("[A6] PASS: Observer subscription and clean unexport verified on existing server state.");
         }
-        System.out.println("[Note] Downward threshold crossing logic is implemented on the server but cannot be demonstrated via normal operations because VetClinicRemote does not define a removePatient method.");
+        System.out.println("[Note] Downward threshold crossing is implemented on the server but cannot be demonstrated via normal operations because VetClinicRemote does not define a removePatient method.");
 
         // ---------------------------------------------------------------------
         // A7 — Serialization Experiment
@@ -272,8 +403,16 @@ public class Client {
         }
 
         if (failureObserved && successObserved) {
-            System.out.println("PASS: A7 experiment demonstrated both unshared class failure and shared class resolution.");
+            System.out.println("[A7] PASS: Experiment demonstrated unshared class failure and shared class resolution.");
+        } else {
+            System.out.println("[A7] FAIL: Serialization experiment incomplete.");
         }
+
+        // ---------------------------------------------------------------------
+        // A8 — Interactive CLI Notice
+        // ---------------------------------------------------------------------
+        System.out.println("\n--- [A8] Interactive CLI ---");
+        System.out.println("[A8] MANUAL CHECK REQUIRED: The CLI is an interactive console application. Run 'scripts/test_a8_cli.sh' for automated smoke test or 'java -cp common/out:client/out vet.client.Main' for interactive verification.");
 
         System.out.println("\n==================================================");
         System.out.println("  Automated Validation Complete!");
