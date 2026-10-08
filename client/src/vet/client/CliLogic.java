@@ -4,13 +4,17 @@ import vet.common.AnimalRemote;
 import vet.common.MedicalRecordRemote;
 import vet.common.Species;
 import vet.common.VetClinicRemote;
+
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
- * CliLogic — wraps all RMI calls for the CLI.
- * No Scanner, no System.out menus here.
+ * CliLogic — encapsulates all RMI communications for the CLI.
+ * Converts remote objects (stubs) into lightweight views/DTOs
+ * so the console layer does not perform any remote invocations directly.
  */
 public class CliLogic {
 
@@ -22,14 +26,74 @@ public class CliLogic {
         this.clinic = clinic;
     }
 
-    // ── Patient queries ────────────────────────────────────────────────────────
+    // ── DTOs for the Presentation Layer ────────────────────────────────────────
 
-    public List<AnimalRemote> getPatients() throws RemoteException {
-        return clinic.getPatients();
+    public static class PatientView {
+        private final String name;
+        private final String owner;
+        private final String breed;
+        private final String speciesName;
+        private final int lifespan;
+
+        public PatientView(String name, String owner, String breed, String speciesName, int lifespan) {
+            this.name = name;
+            this.owner = owner;
+            this.breed = breed;
+            this.speciesName = speciesName;
+            this.lifespan = lifespan;
+        }
+
+        public String getName() { return name; }
+        public String getOwner() { return owner; }
+        public String getBreed() { return breed; }
+        public String getSpeciesName() { return speciesName; }
+        public int getLifespan() { return lifespan; }
     }
 
-    public AnimalRemote findByName(String name) throws RemoteException {
-        return clinic.findByName(name);
+    public static class MedicalRecordView {
+        private final String healthStatus;
+        private final List<String> observations;
+
+        public MedicalRecordView(String healthStatus, List<String> observations) {
+            this.healthStatus = healthStatus;
+            this.observations = observations != null ? observations : Collections.emptyList();
+        }
+
+        public String getHealthStatus() { return healthStatus; }
+        public List<String> getObservations() { return observations; }
+    }
+
+    // ── Patient Queries & Commands ─────────────────────────────────────────────
+
+    public List<PatientView> getPatients() throws RemoteException {
+        List<AnimalRemote> stubs = clinic.getPatients();
+        List<PatientView> views = new ArrayList<>();
+        for (AnimalRemote stub : stubs) {
+            Species sp = stub.getSpecies();
+            views.add(new PatientView(
+                    stub.getName(),
+                    stub.getOwnerName(),
+                    stub.getBreed(),
+                    sp != null ? sp.getName() : "Unknown",
+                    sp != null ? sp.getAverageLifespan() : 0
+            ));
+        }
+        return views;
+    }
+
+    public PatientView findByName(String name) throws RemoteException {
+        AnimalRemote stub = clinic.findByName(name);
+        if (stub == null) {
+            return null;
+        }
+        Species sp = stub.getSpecies();
+        return new PatientView(
+                stub.getName(),
+                stub.getOwnerName(),
+                stub.getBreed(),
+                sp != null ? sp.getName() : "Unknown",
+                sp != null ? sp.getAverageLifespan() : 0
+        );
     }
 
     public void addPatient(String name, String owner, String breed,
@@ -38,31 +102,48 @@ public class CliLogic {
         clinic.addPatient(name, owner, breed, species);
     }
 
-    // ── Medical record ─────────────────────────────────────────────────────────
+    // ── Medical Record Commands ────────────────────────────────────────────────
 
-    public String getHealthStatus(AnimalRemote animal) throws RemoteException {
-        return animal.getMedicalRecord().getHealthStatus();
+    public MedicalRecordView getMedicalRecord(String patientName) throws RemoteException {
+        AnimalRemote stub = clinic.findByName(patientName);
+        if (stub == null) {
+            return null;
+        }
+        MedicalRecordRemote record = stub.getMedicalRecord();
+        if (record == null) {
+            return new MedicalRecordView("No record found", Collections.emptyList());
+        }
+        return new MedicalRecordView(record.getHealthStatus(), record.getObservations());
     }
 
-    public List<String> getObservations(AnimalRemote animal) throws RemoteException {
-        return animal.getMedicalRecord().getObservations();
+    public boolean updateHealthStatus(String patientName, String status) throws RemoteException {
+        AnimalRemote stub = clinic.findByName(patientName);
+        if (stub == null) {
+            return false;
+        }
+        MedicalRecordRemote record = stub.getMedicalRecord();
+        if (record == null) {
+            return false;
+        }
+        record.setHealthStatus(status);
+        return true;
     }
 
-    public void updateHealthStatus(AnimalRemote animal, String status) throws RemoteException {
-        animal.getMedicalRecord().setHealthStatus(status);
+    public boolean addObservation(String patientName, String observation) throws RemoteException {
+        AnimalRemote stub = clinic.findByName(patientName);
+        if (stub == null) {
+            return false;
+        }
+        MedicalRecordRemote record = stub.getMedicalRecord();
+        if (record == null) {
+            return false;
+        }
+        record.addObservation(observation);
+        return true;
     }
 
-    public void addObservation(AnimalRemote animal, String observation) throws RemoteException {
-        animal.getMedicalRecord().addObservation(observation);
-    }
+    // ── Observer / Alerts ──────────────────────────────────────────────────────
 
-    // ── Observer / alerts ──────────────────────────────────────────────────────
-
-    /**
-     * Subscribes to clinic alerts.
-     * Creates and exports a VetObserverImpl, then registers it with the server.
-     * Safe to call even if already subscribed (no-op in that case).
-     */
     public void subscribe() throws RemoteException {
         if (subscribed) {
             return;
@@ -72,10 +153,6 @@ public class CliLogic {
         subscribed = true;
     }
 
-    /**
-     * Unsubscribes from clinic alerts and unexports the observer so the JVM can exit.
-     * Safe to call even if not currently subscribed (no-op in that case).
-     */
     public void unsubscribe() throws RemoteException {
         if (!subscribed) {
             return;
@@ -83,11 +160,9 @@ public class CliLogic {
         try {
             clinic.unsubscribe(observer);
         } finally {
-            // Always unexport, even if the server call failed, so the JVM can exit.
             try {
                 UnicastRemoteObject.unexportObject(observer, true);
             } catch (Exception ignored) {
-                // Nothing useful to do here.
             }
             observer = null;
             subscribed = false;

@@ -18,22 +18,22 @@ public class MedicalRecordImpl extends UnicastRemoteObject implements MedicalRec
     }
 
     @Override
-    public String getHealthStatus() throws RemoteException {
+    public synchronized String getHealthStatus() throws RemoteException {
         return healthStatus;
     }
 
     @Override
-    public void setHealthStatus(String status) throws RemoteException {
+    public synchronized void setHealthStatus(String status) throws RemoteException {
         this.healthStatus = status;
     }
 
     @Override
-    public void addObservation(String observation) throws RemoteException {
+    public synchronized void addObservation(String observation) throws RemoteException {
         observations.add(observation);
     }
 
     @Override
-    public List<String> getObservations() throws RemoteException {
-        return new ArrayList<>(observations); // return a copy of the list
+    public synchronized List<String> getObservations() throws RemoteException {
+        return new ArrayList<>(observations); // return a defensive copy
     }
 }

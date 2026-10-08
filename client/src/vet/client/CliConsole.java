@@ -1,19 +1,17 @@
 package vet.client;
 
-import vet.common.AnimalRemote;
 import java.rmi.RemoteException;
 import java.util.List;
 import java.util.Scanner;
 
 /**
  * CliConsole — interactive menu loop.
- * Zero direct RMI calls; delegates everything to CliLogic.
- * Only java.rmi import allowed: RemoteException.
+ * Contains ZERO direct RMI calls on remote stubs; delegates everything to CliLogic.
  */
 public class CliConsole {
 
     private static final String MENU =
-            "\n=== Vet Clinic ===\n" +
+            "\n=== Vet Clinic Management ===\n" +
             "1. List all patients\n" +
             "2. Search patient by name\n" +
             "3. Add new patient\n" +
@@ -65,20 +63,21 @@ public class CliConsole {
 
     private void handleListPatients() {
         try {
-            List<AnimalRemote> patients = logic.getPatients();
+            List<CliLogic.PatientView> patients = logic.getPatients();
             if (patients.isEmpty()) {
-                System.out.println("No patients registered.");
+                System.out.println("No patients registered in clinic.");
                 return;
             }
             System.out.println("Patients (" + patients.size() + "):");
-            for (AnimalRemote a : patients) {
-                System.out.println("  - " + a.getName()
-                        + " | Owner: " + a.getOwnerName()
-                        + " | Breed: " + a.getBreed()
-                        + " | Species: " + a.getSpecies().getName());
+            for (CliLogic.PatientView p : patients) {
+                System.out.println("  - " + p.getName()
+                        + " | Owner: " + p.getOwner()
+                        + " | Breed: " + p.getBreed()
+                        + " | Species: " + p.getSpeciesName()
+                        + " (avg lifespan: " + p.getLifespan() + " yrs)");
             }
         } catch (RemoteException e) {
-            System.out.println("Remote error: " + e.getMessage());
+            System.out.println("Remote communication error: " + e.getMessage());
         }
     }
 
@@ -90,17 +89,18 @@ public class CliConsole {
             return;
         }
         try {
-            AnimalRemote animal = logic.findByName(name);
-            if (animal == null) {
+            CliLogic.PatientView p = logic.findByName(name);
+            if (p == null) {
                 System.out.println("No patient found with name \"" + name + "\".");
             } else {
-                System.out.println("Found: " + animal.getName()
-                        + " | Owner: " + animal.getOwnerName()
-                        + " | Breed: " + animal.getBreed()
-                        + " | Species: " + animal.getSpecies().getName());
+                System.out.println("Found: " + p.getName()
+                        + " | Owner: " + p.getOwner()
+                        + " | Breed: " + p.getBreed()
+                        + " | Species: " + p.getSpeciesName()
+                        + " (avg lifespan: " + p.getLifespan() + " yrs)");
             }
         } catch (RemoteException e) {
-            System.out.println("Remote error: " + e.getMessage());
+            System.out.println("Remote communication error: " + e.getMessage());
         }
     }
 
@@ -136,16 +136,23 @@ public class CliConsole {
             logic.addPatient(name, owner, breed, speciesName, lifespan);
             System.out.println("Patient \"" + name + "\" added successfully.");
         } catch (RemoteException e) {
-            System.out.println("Remote error: " + e.getMessage());
+            System.out.println("Remote communication error: " + e.getMessage());
         }
     }
 
     private void handleViewMedicalRecord() {
-        AnimalRemote animal = promptForAnimal();
-        if (animal == null) return;
+        System.out.print("Patient name: ");
+        String name = scanner.nextLine().trim();
+        if (name.isEmpty()) { System.out.println("Name cannot be empty."); return; }
+
         try {
-            System.out.println("Health status : " + logic.getHealthStatus(animal));
-            List<String> obs = logic.getObservations(animal);
+            CliLogic.MedicalRecordView record = logic.getMedicalRecord(name);
+            if (record == null) {
+                System.out.println("No patient found with name \"" + name + "\".");
+                return;
+            }
+            System.out.println("Health status : " + record.getHealthStatus());
+            List<String> obs = record.getObservations();
             if (obs.isEmpty()) {
                 System.out.println("Observations  : (none)");
             } else {
@@ -155,35 +162,49 @@ public class CliConsole {
                 }
             }
         } catch (RemoteException e) {
-            System.out.println("Remote error: " + e.getMessage());
+            System.out.println("Remote communication error: " + e.getMessage());
         }
     }
 
     private void handleUpdateHealth() {
-        AnimalRemote animal = promptForAnimal();
-        if (animal == null) return;
+        System.out.print("Patient name: ");
+        String name = scanner.nextLine().trim();
+        if (name.isEmpty()) { System.out.println("Name cannot be empty."); return; }
+
         System.out.print("New health status: ");
         String status = scanner.nextLine().trim();
         if (status.isEmpty()) { System.out.println("Status cannot be empty."); return; }
+
         try {
-            logic.updateHealthStatus(animal, status);
-            System.out.println("Health status updated.");
+            boolean ok = logic.updateHealthStatus(name, status);
+            if (ok) {
+                System.out.println("Health status updated successfully for \"" + name + "\".");
+            } else {
+                System.out.println("No patient found with name \"" + name + "\".");
+            }
         } catch (RemoteException e) {
-            System.out.println("Remote error: " + e.getMessage());
+            System.out.println("Remote communication error: " + e.getMessage());
         }
     }
 
     private void handleAddObservation() {
-        AnimalRemote animal = promptForAnimal();
-        if (animal == null) return;
+        System.out.print("Patient name: ");
+        String name = scanner.nextLine().trim();
+        if (name.isEmpty()) { System.out.println("Name cannot be empty."); return; }
+
         System.out.print("Observation: ");
         String obs = scanner.nextLine().trim();
         if (obs.isEmpty()) { System.out.println("Observation cannot be empty."); return; }
+
         try {
-            logic.addObservation(animal, obs);
-            System.out.println("Observation added.");
+            boolean ok = logic.addObservation(name, obs);
+            if (ok) {
+                System.out.println("Observation added successfully for \"" + name + "\".");
+            } else {
+                System.out.println("No patient found with name \"" + name + "\".");
+            }
         } catch (RemoteException e) {
-            System.out.println("Remote error: " + e.getMessage());
+            System.out.println("Remote communication error: " + e.getMessage());
         }
     }
 
@@ -194,9 +215,9 @@ public class CliConsole {
         }
         try {
             logic.subscribe();
-            System.out.println("Subscribed to clinic alerts.");
+            System.out.println("Subscribed to clinic alerts (threshold crossings at 100, 500, 1000).");
         } catch (RemoteException e) {
-            System.out.println("Remote error: " + e.getMessage());
+            System.out.println("Remote communication error: " + e.getMessage());
         }
     }
 
@@ -209,7 +230,7 @@ public class CliConsole {
             logic.unsubscribe();
             System.out.println("Unsubscribed from clinic alerts.");
         } catch (RemoteException e) {
-            System.out.println("Remote error: " + e.getMessage());
+            System.out.println("Remote communication error: " + e.getMessage());
         }
     }
 
@@ -217,36 +238,11 @@ public class CliConsole {
         if (logic.isSubscribed()) {
             try {
                 logic.unsubscribe();
-                System.out.println("Unsubscribed before exit.");
+                System.out.println("Cleanly unsubscribed from alerts.");
             } catch (RemoteException e) {
                 System.out.println("Could not cleanly unsubscribe: " + e.getMessage());
             }
         }
         System.out.println("Goodbye!");
-    }
-
-    // ── Helpers ────────────────────────────────────────────────────────────────
-
-    /**
-     * Prompts for a patient name, looks it up, and returns the remote object.
-     * Returns null (and prints a message) on any failure.
-     */
-    private AnimalRemote promptForAnimal() {
-        System.out.print("Patient name: ");
-        String name = scanner.nextLine().trim();
-        if (name.isEmpty()) {
-            System.out.println("Name cannot be empty.");
-            return null;
-        }
-        try {
-            AnimalRemote animal = logic.findByName(name);
-            if (animal == null) {
-                System.out.println("No patient found with name \"" + name + "\".");
-            }
-            return animal;
-        } catch (RemoteException e) {
-            System.out.println("Remote error: " + e.getMessage());
-            return null;
-        }
     }
 }

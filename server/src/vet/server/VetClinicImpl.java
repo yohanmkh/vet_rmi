@@ -8,81 +8,101 @@ import vet.common.VetObserverRemote;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import vet.common.MedicalRecordRemote;
-import vet.common.VetObserverRemote;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class VetClinicImpl extends UnicastRemoteObject implements VetClinicRemote {
 
     private final List<AnimalImpl> patients;
+    private final List<VetObserverRemote> observers;
+    private static final int[] THRESHOLDS = { 100, 500, 1000 };
 
     public VetClinicImpl() throws RemoteException {
         super();
-        this.patients = new ArrayList<>();
+        this.patients = Collections.synchronizedList(new ArrayList<>());
+        this.observers = new CopyOnWriteArrayList<>();
     }
 
-    public void addPatientLocally(AnimalImpl animal) {
+    public synchronized void addPatientLocally(AnimalImpl animal) {
+        int prevCount = patients.size();
         patients.add(animal);
+        int newCount = patients.size();
+        checkThresholds(prevCount, newCount);
     }
 
     @Override
     public List<AnimalRemote> getPatients() throws RemoteException {
-        return new ArrayList<>(patients);
+        synchronized (patients) {
+            return new ArrayList<>(patients);
+        }
     }
 
     @Override
     public AnimalRemote findByName(String name) throws RemoteException {
-        for (AnimalImpl a : patients) {
-            if (a.getName().equalsIgnoreCase(name))
-                return a;
+        if (name == null) {
+            return null;
         }
-        return null; // or throw a custom exception
+        synchronized (patients) {
+            for (AnimalImpl a : patients) {
+                if (a.getName().equalsIgnoreCase(name)) {
+                    return a;
+                }
+            }
+        }
+        return null;
     }
-
-    private final List<VetObserverRemote> observers = new ArrayList<>();
-    private static final int[] THRESHOLDS = { 100, 500, 1000 };
 
     @Override
     public void subscribe(VetObserverRemote observer) throws RemoteException {
-        observers.add(observer);
-        System.out.println("New observer subscribed. Total: " + observers.size());
+        if (observer != null && !observers.contains(observer)) {
+            observers.add(observer);
+            System.out.println("New observer subscribed. Total: " + observers.size());
+        }
     }
 
     @Override
     public void unsubscribe(VetObserverRemote observer) throws RemoteException {
-        observers.remove(observer);
-        System.out.println("Observer unsubscribed. Total: " + observers.size());
+        if (observer != null) {
+            observers.remove(observer);
+            System.out.println("Observer unsubscribed. Total: " + observers.size());
+        }
     }
 
     @Override
-    public void addPatient(String name, String ownerName, String breed, Species species)
+    public synchronized void addPatient(String name, String ownerName, String breed, Species species)
             throws RemoteException {
+        int prevCount = patients.size();
         AnimalImpl animal = new AnimalImpl(name, ownerName, breed, species);
         patients.add(animal);
-        System.out.println("New patient added: " + name);
-        checkThresholds();
+        int newCount = patients.size();
+        System.out.println("New patient added: " + name + " (total: " + newCount + ")");
+        checkThresholds(prevCount, newCount);
     }
 
-    private void checkThresholds() {
-        int count = patients.size();
+    private void checkThresholds(int prevCount, int newCount) {
         for (int threshold : THRESHOLDS) {
-            if (count == threshold) {
-                notifyObservers("ALERT: Patient count reached " + threshold + "!");
+            if (prevCount < threshold && newCount >= threshold) {
+                notifyObservers("ALERT: Patient count crossed threshold " + threshold + " upwards (now " + newCount + ")!");
+            } else if (prevCount >= threshold && newCount < threshold) {
+                notifyObservers("ALERT: Patient count crossed threshold " + threshold + " downwards (now " + newCount + ")!");
             }
         }
     }
 
     private void notifyObservers(String message) {
-        List<VetObserverRemote> toRemove = new ArrayList<>();
+        List<VetObserverRemote> deadObservers = new ArrayList<>();
         for (VetObserverRemote observer : observers) {
             try {
                 observer.onAlert(message);
             } catch (RemoteException e) {
-                // client is gone — remove it, don't crash
-                System.out.println("Observer unreachable, removing it.");
-                toRemove.add(observer);
+                // Client unreachable or crashed — unregister cleanly
+                System.out.println("Observer unreachable, removing from subscriber list.");
+                deadObservers.add(observer);
             }
         }
-        observers.removeAll(toRemove);
+        if (!deadObservers.isEmpty()) {
+            observers.removeAll(deadObservers);
+        }
     }
 }
