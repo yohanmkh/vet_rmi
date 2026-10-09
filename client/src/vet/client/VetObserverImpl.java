@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+@SuppressWarnings("serial")
 public class VetObserverImpl extends UnicastRemoteObject implements VetObserverRemote {
 
     private final String name;

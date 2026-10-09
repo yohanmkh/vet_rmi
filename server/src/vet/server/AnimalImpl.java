@@ -7,6 +7,7 @@ import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import vet.common.Species;
 
+@SuppressWarnings("serial")
 public class AnimalImpl extends UnicastRemoteObject implements AnimalRemote {
 
     private final String name;

@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+@SuppressWarnings("serial")
 public class VetClinicImpl extends UnicastRemoteObject implements VetClinicRemote {
 
     private final List<AnimalImpl> patients;

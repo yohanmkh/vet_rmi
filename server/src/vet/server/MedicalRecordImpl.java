@@ -6,6 +6,7 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.List;
 
+@SuppressWarnings("serial")
 public class MedicalRecordImpl extends UnicastRemoteObject implements MedicalRecordRemote {
 
     private String healthStatus;
