@@ -6,14 +6,6 @@ import java.lang.reflect.Proxy;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 
-/**
- * Main — entry point for the A8 CLI client.
- *
- * Usage:
- *   java -cp ../common/out:out vet.client.Main [host [port]]
- *
- * Defaults: host = localhost, port = 1099
- */
 public class Main {
 
     public static void main(String[] args) {
@@ -37,7 +29,6 @@ public class Main {
             Registry registry = LocateRegistry.getRegistry(host, port);
             clinic = (VetClinicRemote) registry.lookup("VetClinic");
 
-            // Diagnostic: prove the client receives a dynamic RMI proxy stub, not the server implementation
             System.out.println("[RMI proof] Connected to VetClinic stub : " + clinic.getClass().getName());
             System.out.println("[RMI proof] Is JDK dynamic proxy?       : " + Proxy.isProxyClass(clinic.getClass()));
         } catch (Exception e) {

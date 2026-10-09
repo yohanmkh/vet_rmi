@@ -96,7 +96,6 @@ public class VetClinicImpl extends UnicastRemoteObject implements VetClinicRemot
             try {
                 observer.onAlert(message);
             } catch (RemoteException e) {
-                // Client unreachable or crashed — unregister cleanly
                 System.out.println("Observer unreachable, removing from subscriber list.");
                 deadObservers.add(observer);
             }

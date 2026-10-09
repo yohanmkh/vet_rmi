@@ -15,16 +15,13 @@ public class Server {
             }
         }
 
-        // Create the clinic
         VetClinicImpl clinic = new VetClinicImpl();
 
-        // Add initial patients
         Species dog = new Species("Dog", 13);
         Species cat = new Species("Cat", 15);
         clinic.addPatientLocally(new AnimalImpl("Rex", "Dr. Martin", "Labrador", dog));
         clinic.addPatientLocally(new AnimalImpl("Whiskers", "Mrs. Dupont", "Siamese", cat));
 
-        // Create registry or reuse existing if rmiregistry is running
         Registry registry;
         try {
             registry = LocateRegistry.createRegistry(port);

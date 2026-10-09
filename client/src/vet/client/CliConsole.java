@@ -3,10 +3,6 @@ package vet.client;
 import java.util.List;
 import java.util.Scanner;
 
-/**
- * CliConsole — interactive menu loop.
- * Contains ZERO direct RMI calls on remote stubs; delegates everything to CliLogic.
- */
 public class CliConsole {
 
     private static final String MENU =
@@ -57,10 +53,6 @@ public class CliConsole {
             }
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Actions du menu
-    // -------------------------------------------------------------------------
 
     private void handleListPatients() {
         try {

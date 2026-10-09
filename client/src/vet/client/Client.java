@@ -16,17 +16,6 @@ import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.Arrays;
 import java.util.List;
-
-/**
- * Programme de validation des exigences A1 à A7 (TP1 RMI).
- * Prend en charge l'exécution directe de l'ensemble des tests
- * ou des sous-commandes pour les tests multi-processus :
- *   - par défaut : tests A1 à A7 dans la JVM courante
- *   - a3-writer <patient> <status> <observation> [host [port]]
- *   - a3-reader <patient> <expectedStatus> <expectedObs> [host [port]]
- *   - observer <name> <durationSec> [host [port]]
- *   - populate <targetCount> [host [port]]
- */
 public class Client {
 
     public static void main(String[] args) throws Exception {
@@ -47,13 +36,8 @@ public class Client {
             return;
         }
 
-        // Default: Full in-JVM test suite
         runTestSuite(args);
     }
-
-    // =========================================================================
-    // Multi-Process Subcommands
-    // =========================================================================
 
     private static void runA3Writer(String[] args) throws Exception {
         String patient = args.length >= 2 ? args[1] : "Rex";
@@ -114,7 +98,6 @@ public class Client {
         VetClinicRemote clinic = (VetClinicRemote) LocateRegistry.getRegistry(host, port).lookup("VetClinic");
         String logFile = "/tmp/vet_obs_" + name + ".log";
 
-        // File-backed observer that logs every alert
         VetObserverImpl observer = new VetObserverImpl(name) {
             @Override
             public void onAlert(String message) throws java.rmi.RemoteException {
@@ -157,10 +140,6 @@ public class Client {
         System.out.println("[Populate] Done. Total patients: " + clinic.getPatients().size());
     }
 
-    // =========================================================================
-    // Comprehensive In-JVM Test Suite
-    // =========================================================================
-
     private static void runTestSuite(String[] args) throws Exception {
         String host = args.length >= 1 ? args[0] : "localhost";
         int port = args.length >= 2 ? Integer.parseInt(args[1]) : 1099;
@@ -172,9 +151,6 @@ public class Client {
         Registry registry = LocateRegistry.getRegistry(host, port);
         VetClinicRemote clinic = (VetClinicRemote) registry.lookup("VetClinic");
 
-        // ---------------------------------------------------------------------
-        // A1 — Remote Animal Stubs & RMI Proxies
-        // ---------------------------------------------------------------------
         System.out.println("--- [A1] Remote Animal Stubs & RMI Proxies ---");
         System.out.println("Clinic object class: " + clinic.getClass().getName());
         System.out.println("Is Clinic a dynamic proxy? " + Proxy.isProxyClass(clinic.getClass()));
@@ -193,9 +169,6 @@ public class Client {
             System.out.println("[A1] FAIL: Default animal 'Rex' not found on server.");
         }
 
-        // ---------------------------------------------------------------------
-        // A2 — Serializable Species (Pass-by-Value)
-        // ---------------------------------------------------------------------
         System.out.println("\n--- [A2] Serializable Species (Pass-by-Value) ---");
         if (rex != null) {
             Species s1 = rex.getSpecies();
@@ -203,11 +176,9 @@ public class Client {
             System.out.println("Original species: " + s1.getName() + ", avg lifespan: " + origLifespan);
             System.out.println("Client s1 identityHashCode: " + System.identityHashCode(s1));
 
-            // Mutate local copy
             s1.setAverageLifespan(999);
             System.out.println("Mutated local copy s1 lifespan to: " + s1.getAverageLifespan());
 
-            // Re-fetch from server
             Species s2 = rex.getSpecies();
             System.out.println("Server returned s2 lifespan: " + s2.getAverageLifespan());
             System.out.println("Client s2 identityHashCode: " + System.identityHashCode(s2));
@@ -220,9 +191,6 @@ public class Client {
             }
         }
 
-        // ---------------------------------------------------------------------
-        // A3 — Remote Medical Record (Shared State Across Multiple Clients)
-        // ---------------------------------------------------------------------
         System.out.println("\n--- [A3] Remote Medical Record (Shared State) ---");
         VetClinicRemote client1Clinic = (VetClinicRemote) LocateRegistry.getRegistry(host, port).lookup("VetClinic");
         VetClinicRemote client2Clinic = (VetClinicRemote) LocateRegistry.getRegistry(host, port).lookup("VetClinic");
@@ -256,9 +224,6 @@ public class Client {
             System.out.println("[A3] FAIL: MedicalRecord modifications not shared.");
         }
 
-        // ---------------------------------------------------------------------
-        // A4 — Veterinary Clinic Listing & Search
-        // ---------------------------------------------------------------------
         System.out.println("\n--- [A4] Veterinary Clinic Listing & Search ---");
         String[] bindings = registry.list();
         System.out.println("Registry bindings: " + Arrays.toString(bindings));
@@ -278,9 +243,6 @@ public class Client {
             System.out.println("[A4] FAIL: A4 requirements check failed.");
         }
 
-        // ---------------------------------------------------------------------
-        // A5 — Add Patient (Count Verification & Field Assertions)
-        // ---------------------------------------------------------------------
         System.out.println("\n--- [A5] Add Patient via Remote Call ---");
         int countBefore = clinic.getPatients().size();
         String testPatientName = "Patient_A5_" + (System.currentTimeMillis() % 10000);
@@ -306,9 +268,6 @@ public class Client {
             System.out.println("[A5] FAIL: addPatient verification failed (countOk=" + countOk + ", fieldsOk=" + fieldsOk + ").");
         }
 
-        // ---------------------------------------------------------------------
-        // A6 — Remote Observer & Threshold Semantics
-        // ---------------------------------------------------------------------
         System.out.println("\n--- [A6] Remote Observer & Threshold Semantics ---");
         int currentCount = clinic.getPatients().size();
         System.out.println("Current patient count: " + currentCount);
@@ -359,9 +318,6 @@ public class Client {
         }
         System.out.println("[Note] Downward threshold crossing is implemented on the server but cannot be demonstrated via normal operations because VetClinicRemote does not define a removePatient method.");
 
-        // ---------------------------------------------------------------------
-        // A7 — Serialization Experiment
-        // ---------------------------------------------------------------------
         System.out.println("\n--- [A7] Serialization Experiment ---");
         System.out.println("Step 1: Attempting to send client-only class UnsharedSpecies...");
         boolean failureObserved = false;
@@ -411,9 +367,6 @@ public class Client {
             System.out.println("[A7] FAIL: Serialization experiment incomplete.");
         }
 
-        // ---------------------------------------------------------------------
-        // A8 — Interactive CLI Notice
-        // ---------------------------------------------------------------------
         System.out.println("\n--- [A8] Interactive CLI ---");
         System.out.println("[A8] MANUAL CHECK REQUIRED: the CLI is interactive. Run 'java -cp common/out:client/out vet.client.Main'.");
 

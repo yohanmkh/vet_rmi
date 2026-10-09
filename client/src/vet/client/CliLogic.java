@@ -11,11 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * CliLogic — encapsulates all RMI communications for the CLI.
- * Converts remote objects (stubs) into lightweight views/DTOs
- * so the console layer does not perform any remote invocations directly.
- */
+
 public class CliLogic {
 
     private final VetClinicRemote clinic;
@@ -26,7 +22,6 @@ public class CliLogic {
         this.clinic = clinic;
     }
 
-    // --- Vues (DTOs) pour la presentation ---
 
     public static class PatientView {
         private final String name;
@@ -63,7 +58,6 @@ public class CliLogic {
         public List<String> getObservations() { return observations; }
     }
 
-    // --- Conversion des exceptions RMI ---
 
     private static ClientException wrap(RemoteException e) {
         Throwable root = e;
@@ -73,7 +67,6 @@ public class CliLogic {
         return new ClientException("Server unreachable or call failed (" + root.getMessage() + ").", e);
     }
 
-    // --- Operations sur les patients ---
 
     public List<PatientView> getPatients() throws ClientException {
         try {
@@ -118,7 +111,6 @@ public class CliLogic {
         );
     }
 
-    // --- Operations sur les dossiers medicaux ---
 
     public MedicalRecordView getMedicalRecord(String patientName) throws ClientException {
         try {
@@ -170,7 +162,6 @@ public class CliLogic {
         }
     }
 
-    // --- Gestion des observateurs et alertes ---
 
     public void subscribe() throws ClientException {
         if (subscribed) {

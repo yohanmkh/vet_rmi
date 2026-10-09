@@ -34,6 +34,6 @@ public class MedicalRecordImpl extends UnicastRemoteObject implements MedicalRec
 
     @Override
     public synchronized List<String> getObservations() throws RemoteException {
-        return new ArrayList<>(observations); // return a defensive copy
+        return new ArrayList<>(observations);
     }
 }

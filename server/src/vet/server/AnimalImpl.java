@@ -30,7 +30,6 @@ public class AnimalImpl extends UnicastRemoteObject implements AnimalRemote {
         return name;
     }
 
-    // implement the other getters
     @Override
     public String getOwnerName() throws RemoteException {
         return ownerName;

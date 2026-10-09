@@ -7,7 +7,7 @@ public class Species implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private String name;
-    private int averageLifespan; // in years
+    private int averageLifespan;
 
     public Species(String name, int averageLifespan) {
         this.name = name;
@@ -22,7 +22,6 @@ public class Species implements Serializable {
         return averageLifespan;
     }
 
-    // add a setter so the client can mutate its local copy
     public void setAverageLifespan(int years) {
         this.averageLifespan = years;
     }
